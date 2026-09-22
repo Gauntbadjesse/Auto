@@ -44,26 +44,70 @@ class SiteBrowser:
         if not _host_allowed(url):
             raise DomainNotAllowed(f"Refusing to navigate outside {config.ALLOWED_DOMAIN}: {url}")
         await self.page.goto(url, wait_until="domcontentloaded")
-        return await self.read_text()
+        return await self.look()
 
     async def read_text(self, selector: str = "body") -> str:
         el = self.page.locator(selector).first
         text = await el.inner_text()
         return text[:8000]
 
-    async def click(self, selector: str) -> str:
-        await self.page.locator(selector).first.click()
+    async def look(self) -> str:
+        """Like a human scanning the page: numbered list of visible, clickable/typeable
+        elements with their labels. click()/type() refer to elements by this number."""
+        elements = await self.page.evaluate(_SNAPSHOT_JS)
+        if not elements:
+            return "(no interactive elements visible)"
+        lines = []
+        for el in elements:
+            desc = f'[{el["id"]}] {el["tag"]}'
+            if el["type"]:
+                desc += f'[{el["type"]}]'
+            if el["text"]:
+                desc += f' "{el["text"]}"'
+            lines.append(desc)
+        return "\n".join(lines)
+
+    async def click(self, element_id: int) -> str:
+        locator = self.page.locator(f'[data-agent-id="{element_id}"]')
+        if await locator.count() == 0:
+            return f"No such element [{element_id}] - call look() again, the page may have changed"
+        await locator.first.click()
         await self.page.wait_for_load_state("domcontentloaded")
         if not _host_allowed(self.page.url):
             await self.page.go_back()
             raise DomainNotAllowed(f"Click navigated outside {config.ALLOWED_DOMAIN}")
-        return await self.read_text()
+        return await self.look()
 
-    async def fill(self, selector: str, value: str) -> str:
-        await self.page.locator(selector).first.fill(value)
-        return f"Filled {selector!r}"
+    async def type(self, element_id: int, value: str) -> str:
+        locator = self.page.locator(f'[data-agent-id="{element_id}"]')
+        if await locator.count() == 0:
+            return f"No such element [{element_id}] - call look() again, the page may have changed"
+        await locator.first.fill(value)
+        return f"Typed into [{element_id}]"
 
     async def login(self) -> str:
         if not (config.SITE_USERNAME and config.SITE_PASSWORD):
             return "No SITE_USERNAME/SITE_PASSWORD configured"
-        return "Credentials available; use fill()/click() on the login form fields"
+        return "Credentials available; use look() to find the username/password fields, then type()/click()"
+
+
+_SNAPSHOT_JS = """
+() => {
+  const isVisible = (el) => {
+    const r = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+  };
+  const els = Array.from(document.querySelectorAll(
+    'a, button, input, textarea, select, [role="button"], [onclick]'
+  )).filter(isVisible);
+  return els.map((el, i) => {
+    el.setAttribute('data-agent-id', String(i));
+    const text = (
+      el.innerText || el.value || el.getAttribute('aria-label') ||
+      el.getAttribute('placeholder') || el.getAttribute('title') || ''
+    ).trim().replace(/\\s+/g, ' ').slice(0, 80);
+    return { id: i, tag: el.tagName.toLowerCase(), type: el.getAttribute('type') || '', text };
+  });
+}
+"""

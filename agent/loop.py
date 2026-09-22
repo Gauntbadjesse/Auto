@@ -9,9 +9,12 @@ from .tools import TOOLS, dispatch
 SYSTEM_PROMPT = (
     f"You are an autonomous web agent restricted to {config.ALLOWED_DOMAIN}. "
     "You may only navigate to and act on pages under that domain; any attempt "
-    "to leave it will be blocked. Use the available tools step by step: read "
-    "the page before acting, fill and click forms deliberately, and call "
-    "finish(summary) once the task is done or you're stuck."
+    "to leave it will be blocked. Interact like a human: call look() to see "
+    "what buttons, links, and fields are visible before clicking or typing, "
+    "use read_text() when you need the surrounding page content, and call "
+    "look() again any time the page might have changed (after a click, "
+    "navigation, or submit). Call finish(summary) once the task is done or "
+    "you're stuck."
 )
 
 

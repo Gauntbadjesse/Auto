@@ -15,37 +15,46 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_text",
-            "description": "Read visible text from the current page (or a CSS selector within it).",
-            "parameters": {
-                "type": "object",
-                "properties": {"selector": {"type": "string", "default": "body"}},
-            },
+            "description": "Read the full visible text of the current page, for context/instructions.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "look",
+            "description": (
+                "Look at the page like a human would: returns a numbered list of visible "
+                "buttons, links, and form fields with their labels. Call this before click/type "
+                "to see what's on screen, and again after the page changes."
+            ),
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
         "type": "function",
         "function": {
             "name": "click",
-            "description": "Click an element matching a CSS selector on the current page.",
+            "description": "Click the element with this number, as shown by look().",
             "parameters": {
                 "type": "object",
-                "properties": {"selector": {"type": "string"}},
-                "required": ["selector"],
+                "properties": {"element_id": {"type": "integer"}},
+                "required": ["element_id"],
             },
         },
     },
     {
         "type": "function",
         "function": {
-            "name": "fill",
-            "description": "Type a value into an input/textarea matching a CSS selector.",
+            "name": "type",
+            "description": "Type text into the input/textarea with this number, as shown by look().",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string"},
+                    "element_id": {"type": "integer"},
                     "value": {"type": "string"},
                 },
-                "required": ["selector", "value"],
+                "required": ["element_id", "value"],
             },
         },
     },
@@ -76,11 +85,13 @@ async def dispatch(browser, name: str, args: dict) -> str:
     if name == "goto":
         return await browser.goto(args["url"])
     if name == "read_text":
-        return await browser.read_text(args.get("selector", "body"))
+        return await browser.read_text()
+    if name == "look":
+        return await browser.look()
     if name == "click":
-        return await browser.click(args["selector"])
-    if name == "fill":
-        return await browser.fill(args["selector"], args["value"])
+        return await browser.click(args["element_id"])
+    if name == "type":
+        return await browser.type(args["element_id"], args["value"])
     if name == "login":
         return await browser.login()
     raise ValueError(f"Unknown tool: {name}")
